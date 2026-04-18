@@ -1,0 +1,107 @@
+@startuml Sequence_Async
+
+title Async Scenario — Оплата продвижения объявления через Webhook
+
+actor "Пользователь" as User
+participant "API Gateway" as GW
+participant "Payment Service" as PS
+participant "Платёжный шлюз\n(СПБ / Эквайринг)" as PGW
+database "PostgreSQL" as PG
+queue "RabbitMQ\n[promotion-activated]" as MQ
+participant "Listing Service" as LS
+database "Redis\n(cache)" as Redis
+
+== Инициация платежа ==
+
+User -> GW : POST /api/v1/listings/{id}/promote\n{plan: "top_7days", payment_method: "spb"}
+GW -> GW : Проверка JWT
+GW -> PS : HTTP POST /internal/payments/promote
+
+PS -> PG : INSERT INTO payments\n(id=UUID, listing_id, user_id,\n external_payment_id=NULL,\n amount=149, status='pending')
+PG --> PS : OK, payment_id
+
+PS -> PGW : POST /payments/create\n{payment_id, amount, callback_url}
+PGW --> PS : {redirect_url: "https://pay.example.com/...", gateway_payment_id}
+
+PS -> PG : UPDATE payments SET\nexternal_payment_id = gateway_payment_id\nWHERE id = payment_id
+PG --> PS : OK
+
+PS --> GW : 200 OK {payment_id, redirect_url, amount: 149}
+GW --> User : 200 OK {redirect_url}
+
+User -> PGW : [Пользователь переходит на страницу оплаты и совершает платёж]
+
+note right of User
+  Пользователь покидает приложение и оплачивает через СПБ.
+  Система ждёт webhook от шлюза — без polling.
+end note
+
+== Получение Webhook (возможны дубли!) ==
+
+PGW -> PS : POST /api/v1/payments/webhook\n{gateway_payment_id, status: "paid", amount: 149}
+
+note right of PGW
+  Шлюз может прислать webhook 2+ раз:
+  сеть нестабильна, шлюз повторяет при таймауте.
+  Система должна обрабатывать дубли идемпотентно.
+end note
+
+PS -> PG : SELECT id, status FROM payments\nWHERE external_payment_id = gateway_payment_id\nFOR UPDATE
+
+note right of PG
+  FOR UPDATE блокирует строку.
+  Параллельный дублирующий webhook
+  встанет в очередь — не создаст дубль.
+end note
+
+PG --> PS : {id: payment_id, status: "pending"}
+
+PS -> PS : Проверка: status == "pending"?\n→ Да, продолжаем обработку
+
+PS -> PG : UPDATE payments SET status='paid', updated_at=NOW()\nWHERE id = payment_id AND status = 'pending'
+PG --> PS : 1 row updated
+
+PS -> PG : INSERT INTO promotions\n(listing_id, payment_id, plan='top_7days',\n starts_at=NOW(), expires_at=NOW()+7days, active=true)
+PG --> PS : OK
+
+PS -> MQ : publish(promotion-activated)\n{listing_id, expires_at}
+MQ --> PS : ACK
+
+PS --> PGW : 200 OK (webhook обработан)
+
+== Обработка дублирующего Webhook ==
+
+PGW -> PS : POST /api/v1/payments/webhook\n{gateway_payment_id, status: "paid"}\n[повторная попытка шлюза]
+
+PS -> PG : SELECT id, status FROM payments\nWHERE external_payment_id = gateway_payment_id\nFOR UPDATE
+PG --> PS : {id: payment_id, status: "paid"}
+
+PS -> PS : Проверка: status == "paid"?\n→ Уже обработан, пропускаем
+
+PS --> PGW : 200 OK (идемпотентный ответ)
+
+note right of PS
+  Дублирующий webhook обработан без повторного
+  списания или создания дублирующей записи.
+  Гарантия: unique constraint на external_payment_id
+  + проверка статуса перед UPDATE.
+end note
+
+== Активация продвижения ==
+
+MQ -> LS : consume(promotion-activated)\n{listing_id, expires_at}
+
+LS -> PG : SELECT promoted=true, expires_at\nFROM promotions WHERE listing_id=...
+PG --> LS : OK (подтверждение активации)
+
+LS -> Redis : DEL cache_key(listing_id)
+Redis --> LS : OK
+
+note right of Redis
+  Инвалидация кэша — следующий запрос карточки
+  вернёт актуальный статус продвижения из PostgreSQL.
+end note
+
+LS -> MQ : publish(notification)\n{user_id, type: "promotion_activated", listing_id}
+
+@enduml

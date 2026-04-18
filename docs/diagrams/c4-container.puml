@@ -1,0 +1,71 @@
+@startuml C4_Container
+
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_WITH_LEGEND()
+
+title C4 Level 2 — Container Diagram: Маркетплейс объявлений
+
+Person(buyer_seller, "Покупатель / Продавец", "Использует браузер или мобильное приложение")
+Person(moderator, "Модератор", "Проверяет объявления в ручном режиме")
+
+System_Boundary(marketplace, "Маркетплейс объявлений") {
+
+    Container(api_gateway, "API Gateway", "Go, nginx", "Единая точка входа. JWT-аутентификация, rate limiting, маршрутизация на нижестоящие сервисы. Реализует версионирование /api/v1/.")
+
+    Container(listing_service, "Listing Service", "Go", "Создание, редактирование, удаление объявлений. Управление жизненным циклом (draft → pending → published → archived). Генерация presigned URL для загрузки фото. Публикует задачи модерации в RabbitMQ. Консьюмит результаты модерации и события активации продвижения.")
+
+    Container(search_service, "Search Service", "Go", "Полнотекстовый поиск с фильтрами по категории, цене, геолокации. Ранжирование с учётом продвижения. При недоступности Elasticsearch деградирует на PostgreSQL FTS и возвращает X-Search-Degraded: true.")
+
+    Container(payment_service, "Payment Service", "Go", "Инициация платежей через внешний шлюз. Приём и идемпотентная обработка webhook. Обновляет статус платежа в БД. Публикует событие активации продвижения в RabbitMQ.")
+
+    ContainerDb(postgres, "PostgreSQL", "PostgreSQL 16", "Основное транзакционное хранилище. Хранит объявления, пользователей, платежи, продвижения. Обеспечивает ACID-гарантии. Содержит tsvector-индекс для FTS-fallback.")
+
+    ContainerDb(elasticsearch, "Elasticsearch", "Elasticsearch 8.x", "Поисковый индекс объявлений. Полнотекстовый поиск, геофильтры, ранжирование по релевантности. Шардирован по категориям и регионам. Является производным хранилищем — источник истины PostgreSQL.")
+
+    ContainerDb(redis, "Redis", "Redis 7", "Кэш карточек объявлений (TTL 5 мин), кэш популярных поисковых запросов (TTL 30 сек), хранилище JWT-сессий.")
+
+    Container(rabbitmq, "RabbitMQ", "RabbitMQ 3.x", "Брокер сообщений. Очередь 'moderation' — задачи для ML Moderation API. Очередь 'notifications' — задачи для SMS/Push провайдера. Очередь 'promotion-activated' — события для Listing Service.")
+
+    ContainerDb(object_storage, "Object Storage", "Yandex Object Storage (S3)", "Хранилище фотографий объявлений. Клиент загружает фото напрямую по presigned URL. Репликация в ≥ 2 зонах доступности. CDN раздаёт контент конечным пользователям.")
+}
+
+System_Ext(payment_gateway, "Платёжный шлюз\n(СПБ / Эквайринг)", "Внешний платёжный сервис")
+System_Ext(ml_moderation, "ML Moderation API", "Классификатор текста и изображений")
+System_Ext(cdn, "CDN (Yandex CDN)", "Раздача фотографий")
+System_Ext(sms_push, "SMS / Push провайдер", "Уведомления пользователям")
+
+' Внешние пользователи -> API Gateway
+Rel(buyer_seller, api_gateway, "HTTPS запросы", "HTTPS/REST")
+Rel(moderator, api_gateway, "Работа с очередью модерации", "HTTPS/REST")
+
+' API Gateway -> Сервисы
+Rel(api_gateway, listing_service, "Запросы на создание/просмотр объявлений", "HTTP, sync")
+Rel(api_gateway, search_service, "Поисковые запросы", "HTTP, sync")
+Rel(api_gateway, payment_service, "Запросы на оплату", "HTTP, sync")
+
+' Listing Service -> БД и инфраструктура
+Rel(listing_service, postgres, "Запись/чтение объявлений, пользователей", "SQL, sync")
+Rel(listing_service, redis, "Инвалидация кэша карточек", "Redis protocol, sync")
+Rel(listing_service, rabbitmq, "Публикация задач модерации и уведомлений", "AMQP, async")
+Rel(listing_service, object_storage, "Генерация presigned URL для загрузки фото", "S3 API, sync")
+
+' Search Service -> БД и кэш
+Rel(search_service, elasticsearch, "Полнотекстовый поиск (primary)", "HTTP, sync")
+Rel(search_service, postgres, "FTS fallback при недоступности ES", "SQL, sync")
+Rel(search_service, redis, "Кэш поисковых результатов", "Redis protocol, sync")
+
+' Payment Service -> БД и шлюз
+Rel(payment_service, postgres, "Запись платежей и продвижений", "SQL, sync")
+Rel(payment_service, rabbitmq, "Публикация события promotion-activated", "AMQP, async")
+Rel(payment_service, payment_gateway, "Инициация платежа, получение webhook", "HTTPS, sync + async webhook")
+
+' RabbitMQ -> Внешние системы (через консьюмеров в Listing Service)
+Rel(rabbitmq, ml_moderation, "Задачи модерации (консьюмер в Listing Service)", "HTTPS, sync")
+Rel(rabbitmq, sms_push, "Задачи уведомлений (консьюмер в Listing Service)", "HTTPS, sync")
+
+' Object Storage -> CDN
+Rel(object_storage, cdn, "Фотографии объявлений", "S3 / CDN pull")
+Rel(cdn, buyer_seller, "Раздача фотографий", "HTTPS")
+
+@enduml
