@@ -36,7 +36,7 @@ note right of User
   Система ждёт webhook от шлюза — без polling.
 end note
 
-== Получение Webhook (возможны дубли!) ==
+== Получение Webhook ==
 
 PGW -> PS : POST /api/v1/payments/webhook\n{gateway_payment_id, status: "paid", amount: 149}
 
@@ -56,7 +56,7 @@ end note
 
 PG --> PS : {id: payment_id, status: "pending"}
 
-PS -> PS : Проверка: status == "pending"?\n→ Да, продолжаем обработку
+PS -> PS : if status == "pending" → continue
 
 PS -> PG : UPDATE payments SET status='paid', updated_at=NOW()\nWHERE id = payment_id AND status = 'pending'
 PG --> PS : 1 row updated
@@ -76,7 +76,7 @@ PGW -> PS : POST /api/v1/payments/webhook\n{gateway_payment_id, status: "paid"}\
 PS -> PG : SELECT id, status FROM payments\nWHERE external_payment_id = gateway_payment_id\nFOR UPDATE
 PG --> PS : {id: payment_id, status: "paid"}
 
-PS -> PS : Проверка: status == "paid"?\n→ Уже обработан, пропускаем
+PS -> PS : if status == "paid" → skip
 
 PS --> PGW : 200 OK (идемпотентный ответ)
 

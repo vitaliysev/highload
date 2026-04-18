@@ -1,29 +1,43 @@
 @startuml C4_Context
-
-!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
-
-LAYOUT_WITH_LEGEND()
+!pragma layout smetana
 
 title C4 Level 1 — System Context: Маркетплейс объявлений
 
-Person(buyer_seller, "Покупатель / Продавец", "Физическое лицо. Создаёт объявления, ищет товары, оплачивает продвижение через браузер или мобильное приложение.")
-Person(moderator, "Модератор", "Сотрудник компании. Проверяет объявления, не прошедшие автоматическую модерацию.")
+skinparam defaultTextAlignment center
+skinparam wrapWidth 160
+skinparam componentStyle rectangle
 
-System(marketplace, "Маркетплейс объявлений", "Платформа для публикации и поиска объявлений. Обеспечивает создание объявлений, полнотекстовый поиск, модерацию контента и платное продвижение.")
+skinparam actor {
+    BackgroundColor #d5e8d4
+    BorderColor #82b366
+}
+skinparam component {
+    BackgroundColor #dae8fc
+    BorderColor #6c8ebf
+}
+skinparam rectangle {
+    BackgroundColor #f8cecc
+    BorderColor #b85450
+}
 
-System_Ext(payment_gateway, "Платёжный шлюз\n(СПБ / Эквайринг)", "Обрабатывает платежи за продвижение объявлений. Уведомляет систему о результате оплаты через webhook.")
-System_Ext(ml_moderation, "ML Moderation API", "Классифицирует текст и изображения объявлений. Возвращает решение: одобрено / на ручную проверку / отклонено.")
-System_Ext(cdn, "CDN\n(Yandex CDN)", "Раздаёт фотографии объявлений конечным пользователям с минимальной задержкой из ближайшей точки присутствия.")
-System_Ext(sms_push, "SMS / Push провайдер", "Отправляет уведомления пользователям о результатах модерации и статусах платежей.")
-System_Ext(oauth, "OAuth\n(VK / Яндекс)", "Обеспечивает внешнюю аутентификацию пользователей через социальные сети.")
+actor "Покупатель / Продавец\n[Person]\n\nСоздаёт объявления, ищет товары,\nоплачивает продвижение." as buyer
+actor "Модератор\n[Person]\n\nПроверяет объявления,\nне прошедшие автомодерацию." as moderator
 
-Rel(buyer_seller, marketplace, "Создаёт объявления, ищет товары, оплачивает продвижение", "HTTPS")
-Rel(moderator, marketplace, "Проверяет и модерирует объявления", "HTTPS")
+component "Маркетплейс объявлений\n[Software System]\n\nПубликация и поиск объявлений,\nмодерация, платное продвижение." as marketplace
 
-Rel(marketplace, payment_gateway, "Инициирует платёж, получает webhook с результатом", "HTTPS")
-Rel(marketplace, ml_moderation, "Отправляет текст и фото для автоматической проверки", "HTTPS")
-Rel(marketplace, cdn, "Публикует фотографии, CDN раздаёт их пользователям", "S3 API")
-Rel(marketplace, sms_push, "Отправляет задачи на доставку уведомлений", "HTTPS / AMQP")
-Rel(marketplace, oauth, "Аутентифицирует пользователей через внешние провайдеры", "OAuth 2.0")
+rectangle "Платёжный шлюз\n(СПБ / Эквайринг)\n[External System]\n\nОбрабатывает платежи,\nотправляет webhook." as payment_gw
+rectangle "ML Moderation API\n[External System]\n\nКлассифицирует текст\nи изображения." as ml_api
+rectangle "CDN (Yandex CDN)\n[External System]\n\nРаздаёт фото пользователям." as cdn
+rectangle "SMS / Push провайдер\n[External System]\n\nОтправляет уведомления\nо модерации и платежах." as sms
+rectangle "OAuth (VK / Яндекс)\n[External System]\n\nВнешняя аутентификация." as oauth
+
+buyer --> marketplace : "Создаёт объявления,\nищет, оплачивает [HTTPS]"
+moderator --> marketplace : "Модерирует объявления [HTTPS]"
+
+marketplace --> payment_gw : "Инициирует платёж,\nполучает webhook [HTTPS]"
+marketplace --> ml_api : "Отправляет текст и фото\nна классификацию [HTTPS]"
+marketplace --> cdn : "Публикует фотографии [S3 API]"
+marketplace --> sms : "Задачи уведомлений [HTTPS]"
+marketplace --> oauth : "Аутентификация [OAuth 2.0]"
 
 @enduml

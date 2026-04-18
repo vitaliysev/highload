@@ -33,7 +33,7 @@ note right of User
   и не видно в поиске.
 end note
 
-== Загрузка фотографий (отдельный запрос) ==
+== Загрузка фотографий ==
 
 User -> GW : POST /api/v1/listings/{id}/photos/upload-url\n{filename, content_type, size_bytes}
 GW -> LS : HTTP POST /internal/listings/{id}/photos/upload-url
@@ -42,7 +42,7 @@ S3 --> LS : presigned_url
 LS --> GW : 200 OK {upload_url, photo_id, expires_at}
 GW --> User : 200 OK {upload_url, photo_id}
 
-User -> S3 : PUT {upload_url}\n[загрузка фото напрямую, бэкенд не участвует]
+User -> S3 : PUT {upload_url}\n
 S3 --> User : 200 OK
 
 note right of S3

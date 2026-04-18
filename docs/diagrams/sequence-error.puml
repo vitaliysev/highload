@@ -9,7 +9,7 @@ database "Redis\n(cache)" as Redis
 participant "Elasticsearch" as ES
 database "PostgreSQL\n(FTS fallback)" as PG
 
-== Нормальная работа (для сравнения) ==
+== Нормальная работа ==
 
 note over SS, ES
   В штатном режиме: Redis cache miss → ES → ответ ≤ 300 ms p99
