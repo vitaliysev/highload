@@ -1,0 +1,90 @@
+@startuml C4_Container
+!pragma layout smetana
+
+title C4 Level 2 — Container Diagram: Маркетплейс объявлений
+
+skinparam defaultTextAlignment center
+skinparam wrapWidth 200
+skinparam componentStyle rectangle
+
+skinparam actor {
+    BackgroundColor #d5e8d4
+    BorderColor #82b366
+}
+skinparam component {
+    BackgroundColor #dae8fc
+    BorderColor #6c8ebf
+}
+skinparam database {
+    BackgroundColor #fff2cc
+    BorderColor #d6b656
+}
+skinparam queue {
+    BackgroundColor #e1d5e7
+    BorderColor #9673a6
+}
+skinparam rectangle {
+    BackgroundColor #f8cecc
+    BorderColor #b85450
+}
+skinparam package {
+    BackgroundColor #ececec
+    BorderColor #999999
+}
+
+actor "Покупатель /\nПродавец" as buyer
+actor "Модератор" as moderator
+
+rectangle "Платёжный шлюз\n(СПБ/Эквайринг)\n[External]" as payment_gw
+rectangle "ML Moderation API\n[External]" as ml_api
+rectangle "CDN (Yandex)\n[External]" as cdn
+rectangle "SMS/Push провайдер\n[External]" as sms
+
+package "Маркетплейс объявлений" {
+
+    component "API Gateway\n[Go, nginx]\n\nЕдиная точка входа.\nJWT, rate limiting,\nмаршрутизация /api/v1/." as api_gw
+
+    component "Listing Service\n[Go]\n\nЖизненный цикл объявлений.\nPresigned URL для фото.\nМодерация (async)." as listing_svc
+
+    component "Search Service\n[Go]\n\nПолнотекстовый поиск.\nФильтры, ранжирование.\nFallback на PostgreSQL FTS." as search_svc
+
+    component "Payment Service\n[Go]\n\nИнициация платежей.\nИдемпотентный webhook.\nАктивация продвижения." as payment_svc
+
+    database "PostgreSQL 16\n\nОбъявления, пользователи,\nплатежи, продвижения.\n~130 GB / 3 года." as postgres
+
+    database "Elasticsearch 8.x\n\nПоисковый индекс.\n~100 GB / 3 года.\nШардирование по категориям." as es
+
+    database "Redis 7\n\nКэш карточек (TTL 5m),\nкэш поиска (TTL 30s),\nJWT-сессии." as redis
+
+    queue "RabbitMQ 3.x\n\nОчереди:\nmoderation,\nnotifications,\npromotion-activated." as mq
+
+    database "Object Storage\n(Yandex S3)\n\nФото объявлений.\n~48 TB / 3 года.\nРепликация ≥ 2 AZ." as s3
+}
+
+buyer --> api_gw : "HTTPS"
+moderator --> api_gw : "HTTPS"
+
+api_gw --> listing_svc : "sync / HTTP"
+api_gw --> search_svc : "sync / HTTP"
+api_gw --> payment_svc : "sync / HTTP"
+
+listing_svc --> postgres : "SQL / sync"
+listing_svc --> redis : "инвалидация / sync"
+listing_svc --> mq : "publish / async"
+listing_svc --> s3 : "presigned URL / sync"
+
+search_svc --> es : "поиск / sync"
+search_svc --> postgres : "FTS fallback / sync"
+search_svc --> redis : "кэш / sync"
+
+payment_svc --> postgres : "запись / sync"
+payment_svc --> mq : "publish / async"
+payment_svc --> payment_gw : "инициация [sync]\nwebhook [async]"
+
+mq --> ml_api : "модерация / sync"
+mq --> sms : "уведомления / sync"
+
+s3 --> cdn : "CDN pull"
+cdn --> buyer : "HTTPS"
+
+@enduml

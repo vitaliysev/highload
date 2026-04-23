@@ -1,0 +1,71 @@
+@startuml Sequence_Error
+
+title Error Scenario — Поиск при недоступности Elasticsearch (Graceful Degradation)
+
+actor "Пользователь" as User
+participant "API Gateway" as GW
+participant "Search Service" as SS
+database "Redis\n(cache)" as Redis
+participant "Elasticsearch" as ES
+database "PostgreSQL\n(FTS fallback)" as PG
+
+== Нормальная работа ==
+
+note over SS, ES
+  В штатном режиме: Redis cache miss → ES → ответ ≤ 300 ms p99
+end note
+
+== Сценарий: ES недоступен ==
+
+User -> GW : GET /api/v1/listings/search?q=iphone&category=electronics&price_max=100000
+GW -> GW : Проверка JWT, rate limit
+GW -> SS : HTTP GET /internal/search?q=iphone&...
+
+SS -> Redis : GET cache_key(q=iphone, category=electronics, price_max=100000)
+Redis --> SS : MISS (кэш пуст или истёк TTL 30 сек)
+
+SS -> ES : POST /listings/_search\n{query: {multi_match + filters + geo}}
+note right of ES
+  Elasticsearch недоступен:
+  сетевая ошибка или перегрузка.
+  Search Service ждёт 200 ms (таймаут).
+end note
+
+ES --> SS : [таймаут 200 ms / ConnectionRefused]
+
+SS -> SS : Логирует ошибку ES в мониторинг\n(инженеры получат алерт)
+
+SS -> PG : SELECT * FROM listings\nWHERE status='published'\nAND to_tsvector('russian', title||' '||description)\n  @@ plainto_tsquery('russian', 'iphone')\nAND category_id = 'electronics'\nAND price <= 100000\nORDER BY created_at DESC\nLIMIT 20
+
+note right of PG
+  Используется GIN-индекс на tsvector.
+  PostgreSQL FTS не поддерживает ранжирование
+  по релевантности и продвижению — результаты
+  сортируются по дате, а не по score.
+end note
+
+PG --> SS : 20 строк (без ранжирования по релевантности)
+
+SS -> Redis : SET cache_key → результаты\nTTL = 10 сек (уменьшен при деградации)
+Redis --> SS : OK
+
+SS --> GW : 200 OK\n{items: [...], total: N, degraded: true}\nHeader: X-Search-Degraded: true
+GW --> User : 200 OK {items: [...]}\nHeader: X-Search-Degraded: true
+
+note right of User
+  Пользователь получает результаты — система не упала.
+  Ранжирование по релевантности и продвижению отсутствует,
+  но базовый поиск работает.
+  Фронтенд может показать баннер "Сейчас работаем в режиме ограниченного поиска".
+end note
+
+== Восстановление ES ==
+
+note over SS, ES
+  Как только ES восстанавливается:
+  — Search Service автоматически начинает использовать ES
+  — Нет ручного вмешательства, нет перезапуска
+  — Кэш Redis с результатами FTS истекает через TTL
+end note
+
+@enduml

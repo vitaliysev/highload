@@ -1,0 +1,72 @@
+@startuml Sequence_HappyPath
+
+title Happy Path — Создание объявления и асинхронная модерация
+
+actor "Пользователь" as User
+participant "API Gateway" as GW
+participant "Listing Service" as LS
+database "PostgreSQL" as PG
+queue "RabbitMQ\n[moderation]" as MQ
+participant "Moderation Worker\n(часть Listing Service)" as MW
+participant "ML Moderation API" as ML
+participant "Object Storage\n(S3)" as S3
+queue "RabbitMQ\n[notifications]" as NQ
+
+== Создание объявления ==
+
+User -> GW : POST /api/v1/listings\n{title, description, price, category, location}
+GW -> GW : Проверка JWT-токена\nRate limit check
+GW -> LS : HTTP POST /internal/listings
+
+LS -> PG : INSERT INTO listings\n(id, user_id, title, ..., status='pending')
+PG --> LS : OK, listing_id = UUID
+
+LS -> MQ : publish(moderation_task)\n{listing_id, title, description}
+MQ --> LS : ACK
+
+LS --> GW : 201 Created\n{listing_id, status: "pending", photo_upload_quota: 10}
+GW --> User : 201 Created\n{listing_id, status: "pending"}
+
+note right of User
+  Пользователь получает ответ немедленно.
+  Объявление находится в статусе "pending"
+  и не видно в поиске.
+end note
+
+== Загрузка фотографий ==
+
+User -> GW : POST /api/v1/listings/{id}/photos/upload-url\n{filename, content_type, size_bytes}
+GW -> LS : HTTP POST /internal/listings/{id}/photos/upload-url
+LS -> S3 : GeneratePresignedURL(key, TTL=15min)
+S3 --> LS : presigned_url
+LS --> GW : 200 OK {upload_url, photo_id, expires_at}
+GW --> User : 200 OK {upload_url, photo_id}
+
+User -> S3 : PUT {upload_url}\n
+S3 --> User : 200 OK
+
+note right of S3
+  Клиент загружает фото напрямую в Object Storage.
+  Бэкенд-сервисы не обрабатывают трафик загрузки фото.
+  Это снимает ~85 RPS пиковой нагрузки с Listing Service.
+end note
+
+== Асинхронная модерация ==
+
+MQ -> MW : consume(moderation_task)\n{listing_id, title, description}
+
+MW -> ML : POST /classify\n{text: title+description, images: [photo_keys]}
+ML --> MW : {decision: "approved", confidence: 0.97}
+
+MW -> PG : UPDATE listings SET status='published'\nWHERE id = listing_id
+PG --> MW : OK
+
+MW -> NQ : publish(notification_task)\n{user_id, type: "listing_published", listing_id}
+
+note right of MW
+  80% объявлений проходят автомодерацию.
+  20% отправляются на ручную проверку модератором.
+  Весь цикл: ≤ 30 сек (НФТ-001).
+end note
+
+@enduml

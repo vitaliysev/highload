@@ -1,0 +1,43 @@
+@startuml C4_Context
+!pragma layout smetana
+
+title C4 Level 1 — System Context: Маркетплейс объявлений
+
+skinparam defaultTextAlignment center
+skinparam wrapWidth 160
+skinparam componentStyle rectangle
+
+skinparam actor {
+    BackgroundColor #d5e8d4
+    BorderColor #82b366
+}
+skinparam component {
+    BackgroundColor #dae8fc
+    BorderColor #6c8ebf
+}
+skinparam rectangle {
+    BackgroundColor #f8cecc
+    BorderColor #b85450
+}
+
+actor "Покупатель / Продавец\n[Person]\n\nСоздаёт объявления, ищет товары,\nоплачивает продвижение." as buyer
+actor "Модератор\n[Person]\n\nПроверяет объявления,\nне прошедшие автомодерацию." as moderator
+
+component "Маркетплейс объявлений\n[Software System]\n\nПубликация и поиск объявлений,\nмодерация, платное продвижение." as marketplace
+
+rectangle "Платёжный шлюз\n(СПБ / Эквайринг)\n[External System]\n\nОбрабатывает платежи,\nотправляет webhook." as payment_gw
+rectangle "ML Moderation API\n[External System]\n\nКлассифицирует текст\nи изображения." as ml_api
+rectangle "CDN (Yandex CDN)\n[External System]\n\nРаздаёт фото пользователям." as cdn
+rectangle "SMS / Push провайдер\n[External System]\n\nОтправляет уведомления\nо модерации и платежах." as sms
+rectangle "OAuth (VK / Яндекс)\n[External System]\n\nВнешняя аутентификация." as oauth
+
+buyer --> marketplace : "Создаёт объявления,\nищет, оплачивает [HTTPS]"
+moderator --> marketplace : "Модерирует объявления [HTTPS]"
+
+marketplace --> payment_gw : "Инициирует платёж,\nполучает webhook [HTTPS]"
+marketplace --> ml_api : "Отправляет текст и фото\nна классификацию [HTTPS]"
+marketplace --> cdn : "Публикует фотографии [S3 API]"
+marketplace --> sms : "Задачи уведомлений [HTTPS]"
+marketplace --> oauth : "Аутентификация [OAuth 2.0]"
+
+@enduml
