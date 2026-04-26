@@ -8,18 +8,18 @@ import (
 )
 
 type ListingCard struct {
-	ID          uuid.UUID
-	UserID      uuid.UUID
-	SellerName  string
-	SellerPhone string
-	Title       string
-	Description string
-	Price       float64
-	Category    string
-	Location    string
-	IsPromoted  bool
-	ViewsCount  int
-	CreatedAt   time.Time
+	ID          uuid.UUID `json:"id"`
+	UserID      uuid.UUID `json:"user_id"`
+	SellerName  string    `json:"seller_name"`
+	SellerPhone string    `json:"seller_phone"`
+	Title       string    `json:"title"`
+	Description string    `json:"description"`
+	Price       float64   `json:"price"`
+	Category    string    `json:"category"`
+	Location    string    `json:"location"`
+	IsPromoted  bool      `json:"is_promoted"`
+	ViewsCount  int       `json:"views_count"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type SearchQuery struct {
@@ -33,9 +33,9 @@ type SearchQuery struct {
 }
 
 type SearchResult struct {
-	Items    []*ListingCard
-	Total    int
-	Degraded bool // true — поиск через PG FTS fallback, а не Elasticsearch
+	Items    []*ListingCard `json:"items"`
+	Total    int            `json:"total"`
+	Degraded bool           `json:"degraded"`
 }
 
 type SearchRepository interface {

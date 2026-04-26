@@ -17,19 +17,19 @@ const (
 )
 
 type Listing struct {
-	ID            uuid.UUID
-	UserID        uuid.UUID
-	Title         string
-	Description   string
-	Price         float64
-	Category      string
-	Location      string
-	Status        ListingStatus
-	IsPromoted    bool
-	PromotedUntil *time.Time
-	ViewsCount    int
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	ID            uuid.UUID     `json:"id"`
+	UserID        uuid.UUID     `json:"user_id"`
+	Title         string        `json:"title"`
+	Description   string        `json:"description"`
+	Price         float64       `json:"price"`
+	Category      string        `json:"category"`
+	Location      string        `json:"location"`
+	Status        ListingStatus `json:"status"`
+	IsPromoted    bool          `json:"is_promoted"`
+	PromotedUntil *time.Time    `json:"promoted_until,omitempty"`
+	ViewsCount    int           `json:"views_count"`
+	CreatedAt     time.Time     `json:"created_at"`
+	UpdatedAt     time.Time     `json:"updated_at"`
 }
 
 type ModerationTask struct {
@@ -40,8 +40,8 @@ type ModerationTask struct {
 
 type ListingCard struct {
 	Listing
-	SellerName  string
-	SellerPhone string
+	SellerName  string `json:"seller_name"`
+	SellerPhone string `json:"seller_phone"`
 }
 
 type ListingRepository interface {
