@@ -69,7 +69,7 @@ func main() {
 	}
 	defer publisher.Close()
 
-	svc := service.New(listingRepo, listingCache, publisher)
+	svc := service.New(listingRepo, listingCache, publisher, publisher)
 	h := handler.New(svc)
 
 	mux := http.NewServeMux()

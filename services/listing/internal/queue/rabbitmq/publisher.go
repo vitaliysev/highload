@@ -10,7 +10,10 @@ import (
 	"marketplace/listing/internal/domain"
 )
 
-const moderationQueue = "moderation"
+const (
+	moderationQueue         = "moderation"
+	promotionActivatedQueue = "promotion-activated"
+)
 
 type Publisher struct {
 	ch *amqp.Channel
@@ -22,9 +25,10 @@ func NewPublisher(conn *amqp.Connection) (*Publisher, error) {
 		return nil, fmt.Errorf("rabbitmq open channel: %w", err)
 	}
 
-	_, err = ch.QueueDeclare(moderationQueue, true, false, false, false, nil)
-	if err != nil {
-		return nil, fmt.Errorf("rabbitmq declare queue %s: %w", moderationQueue, err)
+	for _, q := range []string{moderationQueue, promotionActivatedQueue} {
+		if _, err := ch.QueueDeclare(q, true, false, false, false, nil); err != nil {
+			return nil, fmt.Errorf("rabbitmq declare queue %s: %w", q, err)
+		}
 	}
 
 	return &Publisher{ch: ch}, nil
@@ -35,12 +39,23 @@ func (p *Publisher) Publish(ctx context.Context, task domain.ModerationTask) err
 	if err != nil {
 		return fmt.Errorf("marshal moderation task: %w", err)
 	}
+	return p.publish(ctx, moderationQueue, body)
+}
 
+func (p *Publisher) PublishPromotionActivated(ctx context.Context, event domain.PromotionActivatedEvent) error {
+	body, err := json.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("marshal promotion-activated event: %w", err)
+	}
+	return p.publish(ctx, promotionActivatedQueue, body)
+}
+
+func (p *Publisher) publish(ctx context.Context, queue string, body []byte) error {
 	return p.ch.PublishWithContext(ctx,
-		"",                // default exchange — роутинг по имени очереди
-		moderationQueue,   // routing key = имя очереди
-		false,             // mandatory
-		false,             // immediate
+		"",
+		queue,
+		false,
+		false,
 		amqp.Publishing{
 			ContentType:  "application/json",
 			DeliveryMode: amqp.Persistent,

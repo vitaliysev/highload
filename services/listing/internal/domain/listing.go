@@ -44,13 +44,63 @@ type ListingCard struct {
 	SellerPhone string `json:"seller_phone"`
 }
 
+type Photo struct {
+	ID         uuid.UUID `json:"id"`
+	ListingID  uuid.UUID `json:"listing_id"`
+	StorageKey string    `json:"storage_key"`
+	Position   int16     `json:"position"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+type Payment struct {
+	ID                uuid.UUID `json:"id"`
+	ListingID         uuid.UUID `json:"listing_id"`
+	UserID            uuid.UUID `json:"user_id"`
+	ExternalPaymentID string    `json:"external_payment_id"`
+	Amount            int64     `json:"amount"`
+	Currency          string    `json:"currency"`
+	Status            string    `json:"status"`
+	PaymentMethod     string    `json:"payment_method"`
+	CreatedAt         time.Time `json:"created_at"`
+}
+
+type Promotion struct {
+	ID        uuid.UUID `json:"id"`
+	ListingID uuid.UUID `json:"listing_id"`
+	PaymentID uuid.UUID `json:"payment_id"`
+	Plan      string    `json:"plan"`
+	StartsAt  time.Time `json:"starts_at"`
+	ExpiresAt time.Time `json:"expires_at"`
+	Active    bool      `json:"active"`
+}
+
+var PlanDurations = map[string]time.Duration{
+	"top_7days":  7 * 24 * time.Hour,
+	"top_30days": 30 * 24 * time.Hour,
+}
+
+var PlanPrices = map[string]int64{
+	"top_7days":  14900,
+	"top_30days": 49900,
+}
+
+type UserListingsFilter struct {
+	Status  *ListingStatus
+	Page    int
+	PerPage int
+}
+
 type ListingRepository interface {
 	Create(ctx context.Context, l *Listing) (*Listing, error)
 	GetCardByID(ctx context.Context, id uuid.UUID) (*ListingCard, error)
 	UpdateStatus(ctx context.Context, id uuid.UUID, status ListingStatus) error
+	CreatePhoto(ctx context.Context, listingID uuid.UUID, storageKey string, position int16) (*Photo, error)
+	CountPhotos(ctx context.Context, listingID uuid.UUID) (int, error)
+	HasActivePromotion(ctx context.Context, listingID uuid.UUID) (bool, error)
+	CreatePaymentAndPromotion(ctx context.Context, payment *Payment, plan string, expiresAt time.Time) (*Payment, *Promotion, error)
+	GetUserListings(ctx context.Context, userID uuid.UUID, f UserListingsFilter) ([]*Listing, int, error)
 }
 
-// Cache-Aside для карточек объявлений
 type ListingCache interface {
 	GetCard(ctx context.Context, id uuid.UUID) (*ListingCard, error)
 	SetCard(ctx context.Context, card *ListingCard, ttl time.Duration) error
@@ -59,6 +109,10 @@ type ListingCache interface {
 
 type ModerationPublisher interface {
 	Publish(ctx context.Context, task ModerationTask) error
+}
+
+type PromotionPublisher interface {
+	PublishPromotionActivated(ctx context.Context, event PromotionActivatedEvent) error
 }
 
 type PromotionActivatedEvent struct {

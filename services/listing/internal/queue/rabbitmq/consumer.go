@@ -11,11 +11,6 @@ import (
 	"marketplace/listing/internal/domain"
 )
 
-const promotionActivatedQueue = "promotion-activated"
-
-// потребляет события из RabbitMQ
-// инвалидирует карточку объявления в Redis
-// из sequence-async.puml: LS -> Redis : DEL cache_key(listing_id)
 type PromotionConsumer struct {
 	ch    *amqp.Channel
 	cache domain.ListingCache
