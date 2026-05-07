@@ -18,8 +18,6 @@ const (
 	approveRate = 0.80
 )
 
-// паттерн Async Messaging: модерация не блокирует создание объявления.
-// в PoC имитирует ML API случайным решением.
 type ModerationConsumer struct {
 	ch   *amqp.Channel
 	repo domain.ListingRepository
@@ -78,7 +76,6 @@ func (c *ModerationConsumer) handle(ctx context.Context, msg amqp.Delivery) erro
 
 	log.Printf("moderating listing %s: %q", task.ListingID, task.Title)
 
-	// имитация работы ML API
 	delay := time.Duration(500+rand.Intn(2000)) * time.Millisecond
 	select {
 	case <-time.After(delay):

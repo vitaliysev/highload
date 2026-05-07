@@ -21,7 +21,6 @@ func (h *SearchHandler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /health", h.health)
 }
 
-// параметры: q, category, price_min, price_max, location, limit, offset
 func (h *SearchHandler) search(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 
@@ -71,7 +70,6 @@ func (h *SearchHandler) search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Circuit Breaker
 	if result.Degraded {
 		w.Header().Set("X-Search-Degraded", "true")
 	}

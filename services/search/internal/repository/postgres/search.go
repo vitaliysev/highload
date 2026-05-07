@@ -21,9 +21,6 @@ func NewSearchRepo(db *pgxpool.Pool) *SearchRepo {
 	return &SearchRepo{db: db}
 }
 
-// search — PostgreSQL FTS через search_vector (GIN-индекс).
-// это fallback-режим архитектуры: в prod основной бэкенд — Elasticsearch.
-// порядок: продвинутые объявления сначала, затем по дате
 func (r *SearchRepo) Search(ctx context.Context, q domain.SearchQuery) (*domain.SearchResult, error) {
 	args := []any{}
 	conditions := []string{"l.status = 'published'"}
@@ -67,7 +64,6 @@ func (r *SearchRepo) Search(ctx context.Context, q domain.SearchQuery) (*domain.
 		offset = 0
 	}
 
-	// запрос данных + данных продавца (один JOIN вместо N+1).
 	dataQ := fmt.Sprintf(`
 		SELECT
 			l.id, l.user_id, l.title, l.description, l.price,
@@ -103,7 +99,6 @@ func (r *SearchRepo) Search(ctx context.Context, q domain.SearchQuery) (*domain.
 		return nil, err
 	}
 
-	// пагинация
 	countQ := fmt.Sprintf(`SELECT COUNT(*) FROM listings l WHERE %s`, where)
 	var total int
 	if err := r.db.QueryRow(ctx, countQ, args[:idx-1]...).Scan(&total); err != nil {
@@ -113,7 +108,7 @@ func (r *SearchRepo) Search(ctx context.Context, q domain.SearchQuery) (*domain.
 	return &domain.SearchResult{
 		Items:    items,
 		Total:    total,
-		Degraded: true, // всегда true, пока используем PG FTS
+		Degraded: true,
 	}, nil
 }
 

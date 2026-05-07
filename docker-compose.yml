@@ -17,7 +17,7 @@ services:
           cpus: "0.10"
           memory: 64M
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -120,10 +120,11 @@ services:
           cpus: "0.40"
           memory: 512M
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d marketplace"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U postgres -d marketplace"]
       interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 20
+      start_period: 120s
 
   redis:
     image: redis:7-alpine
@@ -161,10 +162,11 @@ services:
           cpus: "0.20"
           memory: 256M
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
       interval: 10s
       timeout: 10s
-      retries: 5
+      retries: 10
+      start_period: 60s
 
 volumes:
   postgres_data:

@@ -42,7 +42,6 @@ func (c *ListingCache) GetCard(ctx context.Context, id uuid.UUID) (*domain.Listi
 	return &card, nil
 }
 
-// кэширует карточку
 func (c *ListingCache) SetCard(ctx context.Context, card *domain.ListingCard, ttl time.Duration) error {
 	data, err := json.Marshal(card)
 	if err != nil {
@@ -51,7 +50,6 @@ func (c *ListingCache) SetCard(ctx context.Context, card *domain.ListingCard, tt
 	return c.client.Set(ctx, cardKey(card.ID), data, ttl).Err()
 }
 
-// вызывается при promotion-activated
 func (c *ListingCache) Delete(ctx context.Context, id uuid.UUID) error {
 	return c.client.Del(ctx, cardKey(id)).Err()
 }

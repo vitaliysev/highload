@@ -26,7 +26,6 @@ func NewSearchCache(client *redis.Client) *SearchCache {
 	return &SearchCache{client: client}
 }
 
-// кэш карточки объявления
 func (c *SearchCache) GetCard(ctx context.Context, id uuid.UUID) (*domain.ListingCard, error) {
 	data, err := c.client.Get(ctx, cardPrefix+id.String()).Bytes()
 	if errors.Is(err, redis.Nil) {
@@ -50,7 +49,6 @@ func (c *SearchCache) SetCard(ctx context.Context, card *domain.ListingCard, ttl
 	return c.client.Set(ctx, cardPrefix+card.ID.String(), data, ttl).Err()
 }
 
-// кэш поискового запроса
 func (c *SearchCache) GetSearch(ctx context.Context, key string) (*domain.SearchResult, error) {
 	data, err := c.client.Get(ctx, searchPrefix+key).Bytes()
 	if errors.Is(err, redis.Nil) {

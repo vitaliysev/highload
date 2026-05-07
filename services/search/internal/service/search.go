@@ -26,9 +26,6 @@ func New(repo domain.SearchRepository, cache domain.SearchCache) *SearchService 
 	return &SearchService{repo: repo, cache: cache}
 }
 
-// Cache-Aside: сначала Redis, при промахе — PostgreSQL FTS.
-// TTL кэша: 30s в нормальном режиме, 10s при деградации
-// X-Search-Degraded заголовок выставляется в handler на основе result.Degraded.
 func (s *SearchService) Search(ctx context.Context, q domain.SearchQuery) (*domain.SearchResult, error) {
 	key := buildCacheKey(q)
 
