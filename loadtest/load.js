@@ -22,9 +22,9 @@ export const options = {
       exec:     'writeScenario',
       startVUs: 0,
       stages: [
-        { duration: '30s', target: 10 },
-        { duration: '1m',  target: 30 },
-        { duration: '5m',  target: 30 },
+        { duration: '30s', target: 20 },
+        { duration: '1m',  target: 40 },
+        { duration: '5m',  target: 40 },
         { duration: '30s', target: 0  },
       ],
     },
