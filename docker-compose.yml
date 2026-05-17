@@ -14,8 +14,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.10"
-          memory: 64M
+          cpus: "2"
+          memory: 128M
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health"]
       interval: 10s
@@ -42,8 +42,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.40"
-          memory: 256M
+          cpus: "2"
+          memory: 768M
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
       interval: 10s
@@ -67,8 +67,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.40"
-          memory: 256M
+          cpus: "2"
+          memory: 768M
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
       interval: 10s
@@ -91,8 +91,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.20"
-          memory: 128M
+          cpus: "2"
+          memory: 384M
 
   postgres:
     image: postgres:16-alpine
@@ -105,20 +105,20 @@ services:
       - ./services/listing/migrations:/docker-entrypoint-initdb.d:ro
     command: >
       postgres
-        -c shared_buffers=128MB
-        -c effective_cache_size=256MB
-        -c work_mem=4MB
-        -c maintenance_work_mem=64MB
+        -c shared_buffers=1GB
+        -c effective_cache_size=2GB
+        -c work_mem=32MB
+        -c maintenance_work_mem=512MB
         -c max_connections=100
-        -c wal_buffers=16MB
+        -c wal_buffers=32MB
         -c checkpoint_completion_target=0.9
         -c random_page_cost=4.0
     restart: unless-stopped
     deploy:
       resources:
         limits:
-          cpus: "0.40"
-          memory: 512M
+          cpus: "2"
+          memory: 3G
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U postgres -d marketplace"]
       interval: 5s
@@ -130,7 +130,7 @@ services:
     image: redis:7-alpine
     command: >
       redis-server
-        --maxmemory 200mb
+        --maxmemory 1536mb
         --maxmemory-policy allkeys-lru
         --save ""
         --appendonly no
@@ -138,8 +138,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.10"
-          memory: 256M
+          cpus: "2"
+          memory: 2G
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -159,8 +159,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.20"
-          memory: 256M
+          cpus: "2"
+          memory: 768M
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
       interval: 10s
